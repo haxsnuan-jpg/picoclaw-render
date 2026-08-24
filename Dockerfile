@@ -12,11 +12,16 @@ WORKDIR /src
 COPY run.go .
 # Fully static binary (no libc dependency) so it runs in the picoclaw base
 # image, which may not ship a dynamic loader. CGO_ENABLED=0 is required.
+# Output to ./run inside WORKDIR (/src/run) — never to /run, which is a
+# directory in alpine and would make `go build` write /run/run instead.
 ENV CGO_ENABLED=0
-RUN go build -o /run run.go
+RUN go build -o run run.go
 
 FROM sipeed/picoclaw:latest
-COPY --from=build --chmod=0755 /run /usr/local/bin/run
+# NOTE: the picoclaw base image ships a directory at /usr/local/bin/run, so
+# we must not copy our binary there (it would land inside that dir). Use a
+# collision-free path instead.
+COPY --from=build --chmod=0755 /src/run /picoclaw-run
 # The picoclaw binary and its PATH/ENV are inherited from the base image.
 EXPOSE 10000
-ENTRYPOINT ["/usr/local/bin/run"]
+ENTRYPOINT ["/picoclaw-run"]
