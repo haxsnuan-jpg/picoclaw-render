@@ -101,13 +101,17 @@ func ensureConfig(path, home string) {
 		modelName = "default"
 	}
 	apiKey := os.Getenv("PICOCLAW_API_KEY")
+	if apiKey == "" {
+		// No real key configured: use a placeholder so the gateway can
+		// still start (status "running"). Chat will fail at the provider
+		// until a real PICOCLAW_API_KEY is supplied via env or the UI.
+		apiKey = "sk-dummy-not-configured"
+	}
 
 	entry := map[string]any{
 		"model_name": modelName,
 		"model":      model,
-	}
-	if apiKey != "" {
-		entry["api_keys"] = []string{apiKey}
+		"api_keys":   []string{apiKey},
 	}
 
 	ch := map[string]any{}
