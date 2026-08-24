@@ -10,7 +10,10 @@
 FROM golang:1.23-alpine AS build
 WORKDIR /src
 COPY run.go .
-RUN go build -ldflags '-extldflags "-static"' -o /run run.go
+# Fully static binary (no libc dependency) so it runs in the picoclaw base
+# image, which may not ship a dynamic loader. CGO_ENABLED=0 is required.
+ENV CGO_ENABLED=0
+RUN go build -o /run run.go
 
 FROM sipeed/picoclaw:latest
 COPY --from=build --chmod=0755 /run /usr/local/bin/run
