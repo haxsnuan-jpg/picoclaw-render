@@ -113,6 +113,9 @@ func ensureConfig(path, home string) {
 		"model":      model,
 		"api_keys":   []string{apiKey},
 	}
+	if apiBase := os.Getenv("PICOCLAW_API_BASE"); apiBase != "" {
+		entry["api_base"] = apiBase
+	}
 
 	ch := map[string]any{}
 	if t := os.Getenv("PICOCLAW_TELEGRAM_TOKEN"); t != "" {
