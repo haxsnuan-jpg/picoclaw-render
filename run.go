@@ -57,6 +57,17 @@ func main() {
 
 	target, _ := url.Parse("http://127.0.0.1:" + uiPort)
 	proxy := httputil.NewSingleHostReverseProxy(target)
+	origDirector := proxy.Director
+	proxy.Director = func(r *http.Request) {
+		origDirector(r)
+		// The launcher only serves the dashboard when the upstream Host is
+		// "localhost"; rewrite it so the launcher accepts the request while
+		// the browser still sees the real public host.
+		r.Host = "localhost:" + uiPort
+		if r.Header.Get("X-Forwarded-Proto") == "" {
+			r.Header.Set("X-Forwarded-Proto", "https")
+		}
+	}
 
 	mux := http.NewServeMux()
 	health := func(w http.ResponseWriter, r *http.Request) {
@@ -66,13 +77,8 @@ func main() {
 	mux.HandleFunc("/healthz", health)
 	mux.HandleFunc("/health", health)
 	mux.HandleFunc("/readyz", health)
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/" {
-			health(w, r)
-			return
-		}
-		proxy.ServeHTTP(w, r)
-	})
+	// Everything else (including "/") is proxied to the launcher UI.
+	mux.HandleFunc("/", proxy.ServeHTTP)
 
 	log.Printf("[run] listening on :%s (proxy -> %s)\n", port, target)
 	if err := http.ListenAndServe(":"+port, mux); err != nil {
