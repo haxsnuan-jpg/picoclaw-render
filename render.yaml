@@ -1,0 +1,57 @@
+# Render deploy untuk PicoClaw — WEB SERVICE (bukan worker) supaya bisa
+# di-ping biar tetap nyala di free tier (spin-down 15 mnt idle).
+#
+#   - run.go (di-dalam image) men-generate config.json dari env var Render,
+#     menjalankan `picoclaw gateway` di background, dan melayani $PORT:
+#       * GET / , /healthz , /readyz -> 200 (health check + keepalive)
+#       * path lainnya -> reverse-proxy ke gateway (webhook bot)
+#   - gateway sendiri jalan di 127.0.0.1:18790 (internal).
+#   - state agent -> Render Disk (PICOCLAW_HOME=/opt/data), persisten.
+#
+# Build: base image sipeed/picoclaw:latest (binary Go pra-build) -> build
+# ringan, tidak seperti Hermes yang berat dan memicu bad gateway di free tier.
+#
+# PREREQUISIT MANUAL (dashboard Render):
+#   1) Connect repo ini sebagai Blueprint (New > Blueprint).
+#   2) Isi secret env (sync:false di bawah):
+#        PICOCLAW_API_KEY        -> API key LLM (OpenAI/Anthropic/dst)
+#        PICOCLAW_MODEL          -> mis. openai/gpt-5.4 (opsional)
+#        PICOCLAW_MODEL_NAME     -> alias model (opsional)
+#        PICOCLAW_TELEGRAM_TOKEN -> token bot (isian jika pakai Telegram)
+#        PICOCLAW_DISCORD_TOKEN  -> token bot (isian jika pakai Discord)
+#        PICOCLAW_SLACK_BOT_TOKEN/APP_TOKEN -> token Slack (opsional)
+#   3) Biar tetap nyala: pasang external pinger (UptimeRobot/cron-job.org)
+#      ke URL service, hit tiap 5-10 menit.
+
+services:
+  - type: web
+    name: picoclaw
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /healthz
+    envVars:
+      # state agent -> Render Disk (sudah di-chown ke user picoclaw saat boot)
+      - key: PICOCLAW_HOME
+        value: /opt/data
+      - key: PICOCLAW_CONFIG
+        value: /opt/data/config.json
+      # ---- LLM provider (isi PICOCLAW_API_KEY + PICOCLAW_MODEL) ----
+      - key: PICOCLAW_API_KEY
+        sync: false
+      - key: PICOCLAW_MODEL
+        sync: false
+      - key: PICOCLAW_MODEL_NAME
+        sync: false
+      # ---- Platform bot (isi yg dipakai) ----
+      - key: PICOCLAW_TELEGRAM_TOKEN
+        sync: false
+      - key: PICOCLAW_DISCORD_TOKEN
+        sync: false
+      - key: PICOCLAW_SLACK_BOT_TOKEN
+        sync: false
+      - key: PICOCLAW_SLACK_APP_TOKEN
+        sync: false
+    disk:
+      name: picoclaw-data
+      mountPath: /opt/data
+      sizeGB: 10
