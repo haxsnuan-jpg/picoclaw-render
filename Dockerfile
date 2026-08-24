@@ -17,11 +17,11 @@ COPY run.go .
 ENV CGO_ENABLED=0
 RUN go build -o run run.go
 
-FROM sipeed/picoclaw:latest
+FROM sipeed/picoclaw:launcher
 # NOTE: the picoclaw base image ships a directory at /usr/local/bin/run, so
 # we must not copy our binary there (it would land inside that dir). Use a
 # collision-free path instead.
 COPY --from=build --chmod=0755 /src/run /picoclaw-run
-# The picoclaw binary and its PATH/ENV are inherited from the base image.
+# The picoclaw + picoclaw-launcher binaries and PATH/ENV are inherited.
 EXPOSE 10000
 ENTRYPOINT ["/picoclaw-run"]

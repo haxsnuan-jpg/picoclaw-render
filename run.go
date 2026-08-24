@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-const gwPort = "18790"
+const uiPort = "18800"
 
 func main() {
 	port := os.Getenv("PORT")
@@ -30,33 +30,32 @@ func main() {
 
 	ensureConfig(cfgPath, home)
 
-	// Run the gateway as a supervised child; restart on exit so the
-	// service stays up (and webhooks keep flowing) even if it crashes.
+	// Run the launcher (browser UI on uiPort + manages the gateway) as a
+	// supervised child; restart on exit so the service stays up.
 	go func() {
 		for {
-			cmd := exec.Command("picoclaw", "gateway", "--allow-empty")
+			cmd := exec.Command("picoclaw-launcher", "-console", "-public", "-no-browser")
 			cmd.Env = append(os.Environ(),
 				"PICOCLAW_GATEWAY_HOST=0.0.0.0",
-				"PICOCLAW_GATEWAY_PORT="+gwPort,
 				"PICOCLAW_HOME="+home,
 				"PICOCLAW_CONFIG="+cfgPath,
 			)
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
-			log.Println("[run] starting picoclaw gateway")
+			log.Println("[run] starting picoclaw-launcher")
 			if err := cmd.Start(); err != nil {
-				log.Println("[run] gateway start error:", err)
+				log.Println("[run] launcher start error:", err)
 				time.Sleep(5 * time.Second)
 				continue
 			}
 			if err := cmd.Wait(); err != nil {
-				log.Println("[run] gateway exited:", err)
+				log.Println("[run] launcher exited:", err)
 			}
 			time.Sleep(3 * time.Second)
 		}
 	}()
 
-	target, _ := url.Parse("http://127.0.0.1:" + gwPort)
+	target, _ := url.Parse("http://127.0.0.1:" + uiPort)
 	proxy := httputil.NewSingleHostReverseProxy(target)
 
 	mux := http.NewServeMux()
