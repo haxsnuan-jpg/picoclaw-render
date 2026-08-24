@@ -35,11 +35,18 @@ func main() {
 	go func() {
 		for {
 			cmd := exec.Command("picoclaw-launcher", "-console", "-public", "-no-browser")
-			cmd.Env = append(os.Environ(),
+			env := append(os.Environ(),
 				"PICOCLAW_GATEWAY_HOST=0.0.0.0",
 				"PICOCLAW_HOME="+home,
 				"PICOCLAW_CONFIG="+cfgPath,
 			)
+			// PicoClaw gateway reads OPENAI_API_KEY for the model entry
+			// (api_key is not a valid model_list field). Mirror
+			// PICOCLAW_API_KEY into OPENAI_API_KEY so users only set one.
+			if v := os.Getenv("PICOCLAW_API_KEY"); v != "" && os.Getenv("OPENAI_API_KEY") == "" {
+				env = append(env, "OPENAI_API_KEY="+v)
+			}
+			cmd.Env = env
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 			log.Println("[run] starting picoclaw-launcher")
@@ -100,22 +107,17 @@ func ensureConfig(path, home string) {
 	if modelName == "" {
 		modelName = "default"
 	}
-	apiKey := os.Getenv("PICOCLAW_API_KEY")
-	if apiKey == "" {
-		// No real key configured: use a placeholder so the gateway can
-		// still start (status "running"). Chat will fail at the provider
-		// until a real PICOCLAW_API_KEY is supplied via env or the UI.
-		apiKey = "sk-dummy-not-configured"
-	}
-
 	entry := map[string]any{
 		"model_name": modelName,
+		"provider":   "",
 		"model":      model,
-		"api_keys":   []string{apiKey},
 	}
 	if apiBase := os.Getenv("PICOCLAW_API_BASE"); apiBase != "" {
 		entry["api_base"] = apiBase
 	}
+	// api_key is NOT written to config - PicoClaw's config schema rejects
+	// model_list[].api_key/api_keys. The key is supplied at runtime via
+	// the OPENAI_API_KEY env var (see launcher Env below).
 
 	ch := map[string]any{}
 	if t := os.Getenv("PICOCLAW_TELEGRAM_TOKEN"); t != "" {
